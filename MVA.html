@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="ml">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>മലയാളം വോയിസ് അസിസ്റ്റന്റ്</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manjari:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Manjari', 'Inter', sans-serif;
+            touch-action: manipulation;
+        }
+        .pulse {
+            animation: pulse-animation 1.5s infinite;
+        }
+        @keyframes pulse-animation {
+            0% {
+                box-shadow: 0 0 0 0 rgba(29, 78, 216, 0.7);
+            }
+            100% {
+                box-shadow: 0 0 0 20px rgba(29, 78, 216, 0);
+            }
+        }
+        /* Custom modal styles */
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 90%;
+            width: 400px;
+            text-align: center;
+        }
+        .modal-close-btn {
+            margin-top: 1.5rem;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-2xl mx-auto bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 md:p-8 space-y-6">
+        <!-- Header -->
+        <div class="text-center">
+            <h1 class="text-3xl md:text-4xl font-bold text-blue-600 dark:text-blue-400">മലയാളം വോയിസ് അസിസ്റ്റന്റ്</h1>
+            <p class="text-gray-500 dark:text-gray-400 mt-2">നിങ്ങളുടെ ചോദ്യങ്ങൾ ചോദിക്കൂ, ഞാൻ സഹായിക്കാം</p>
+        </div>
+
+        <!-- Main Interaction Area -->
+        <div class="flex flex-col items-center justify-center space-y-8 py-8">
+            <button id="micButton" class="w-24 h-24 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-all duration-300 ease-in-out focus:outline-none focus:ring-4 focus:ring-blue-300 dark:focus:ring-blue-800">
+                <svg id="micIcon" xmlns="http://www.w3.org/2000/svg" class="h-12 w-12" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm5 10.5a.5.5 0 01.5.5v.5a.5.5 0 01-1 0V15a.5.5 0 01.5-.5z" clip-rule="evenodd" />
+                    <path fill-rule="evenodd" d="M5 8a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1zm1 3a1 1 0 000 2h6a1 1 0 100-2H6z" clip-rule="evenodd" />
+                    <path d="M3 8a4 4 0 014-4h6a4 4 0 014 4v4a4 4 0 01-4 4H7a4 4 0 01-4-4V8zm4-3a3 3 0 00-3 3v4a3 3 0 003 3h6a3 3 0 003-3V8a3 3 0 00-3-3H7z" />
+                </svg>
+            </button>
+            <p id="status" class="text-lg font-medium text-gray-600 dark:text-gray-300 h-6">മൈക്ക് ബട്ടൺ അമർത്തി സംസാരിക്കുക</p>
+        </div>
+
+        <!-- Results Display -->
+        <div class="space-y-4">
+            <div>
+                <h2 class="font-semibold text-gray-700 dark:text-gray-300">നിങ്ങളുടെ ചോദ്യം:</h2>
+                <p id="userQuery" class="mt-1 p-3 bg-gray-100 dark:bg-gray-700 rounded-lg min-h-[40px] text-gray-800 dark:text-gray-200"></p>
+            </div>
+            <div>
+                <h2 class="font-semibold text-gray-700 dark:text-gray-300">അസിസ്റ്റന്റിന്റെ മറുപടി:</h2>
+                <p id="assistantResponse" class="mt-1 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg min-h-[40px] text-gray-800 dark:text-gray-200"></p>
+            </div>
+        </div>
+         <!-- User ID Display -->
+        <div class="text-center text-xs text-gray-400 dark:text-gray-500 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <p>User ID: <span id="userIdDisplay">Loading...</span></p>
+        </div>
+    </div>
+
+    <!-- Modal for messages -->
+    <div id="messageModal" class="modal-backdrop hidden">
+        <div class="modal-content">
+            <p id="modalMessageText"></p>
+            <button id="modalCloseBtn" class="modal-close-btn bg-blue-600 text-white px-4 py-2 rounded-lg">Close</button>
+        </div>
+    </div>
+
+    <script type="module">
+        // Firebase Imports
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- UI ELEMENTS ---
+        const micButton = document.getElementById('micButton');
+        const micIcon = document.getElementById('micIcon');
+        const status = document.getElementById('status');
+        const userQuery = document.getElementById('userQuery');
+        const assistantResponse = document.getElementById('assistantResponse');
+        const userIdDisplay = document.getElementById('userIdDisplay');
+        const messageModal = document.getElementById('messageModal');
+        const modalMessageText = document.getElementById('modalMessageText');
+        const modalCloseBtn = document.getElementById('modalCloseBtn');
+
+        // --- STATE MANAGEMENT ---
+        let isListening = false;
+        let recognition;
+        let auth, db, userId;
+
+        // --- FIREBASE SETUP ---
+        // These will be populated by the environment. Do not change them.
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+        // Function to show a custom modal message
+        function showModal(message) {
+            modalMessageText.textContent = message;
+            messageModal.classList.remove('hidden');
+        }
+
+        modalCloseBtn.addEventListener('click', () => {
+            messageModal.classList.add('hidden');
+        });
+
+        // Initialize Firebase and Auth
+        async function initializeFirebase() {
+            try {
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                setLogLevel('debug'); // For detailed console logs
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        console.log("User authenticated with UID:", userId);
+                        userIdDisplay.textContent = userId;
+                    } else {
+                        console.log("No user signed in. Attempting to sign in.");
+                        await authenticateUser();
+                    }
+                });
+
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
+                showModal("Could not connect to services. Please refresh the page.");
+            }
+        }
+        
+        async function authenticateUser() {
+            try {
+                if (initialAuthToken) {
+                    console.log("Signing in with custom token...");
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    console.log("Signing in anonymously...");
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Authentication failed:", error);
+                showModal(`Authentication failed: ${error.message}`);
+                userIdDisplay.textContent = "Authentication Failed";
+            }
+        }
+
+
+        // --- SPEECH RECOGNITION SETUP ---
+        try {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                throw new Error("Speech Recognition not supported in this browser.");
+            }
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.lang = 'ml-IN'; // Malayalam - India
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
+
+            recognition.onstart = () => {
+                isListening = true;
+                status.textContent = 'കേൾക്കുന്നു...';
+                micButton.classList.add('pulse');
+                micIcon.style.fill = '#f87171'; // red-400
+            };
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                userQuery.textContent = transcript;
+                processQuery(transcript);
+            };
+
+            recognition.onspeechend = () => {
+                recognition.stop();
+            };
+
+            recognition.onend = () => {
+                isListening = false;
+                status.textContent = 'പ്രോസസ്സ് ചെയ്യുന്നു...';
+                micButton.classList.remove('pulse');
+                micIcon.style.fill = 'white';
+            };
+
+            recognition.onerror = (event) => {
+                console.error("Speech recognition error:", event.error);
+                let errorMessage = 'ക്ഷമിക്കണം, ഒരു പിശക് സംഭവിച്ചു.';
+                if (event.error === 'no-speech') {
+                    errorMessage = 'ഒന്നും കേട്ടില്ല. ദയവായി വീണ്ടും ശ്രമിക്കുക.';
+                } else if (event.error === 'not-allowed') {
+                    errorMessage = 'മൈക്രോഫോൺ ആക്സസ് ആവശ്യമാണ്.';
+                }
+                status.textContent = errorMessage;
+                showModal(errorMessage);
+            };
+
+        } catch (error) {
+            console.error("Failed to initialize Speech Recognition:", error.message);
+            status.textContent = "Speech recognition not supported.";
+            micButton.disabled = true;
+            showModal("Sorry, your browser does not support voice commands.");
+        }
+
+        // --- TEXT-TO-SPEECH (TTS) SETUP ---
+        function speak(text) {
+            try {
+                if (!window.speechSynthesis) {
+                    throw new Error("Speech Synthesis not supported.");
+                }
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'ml-IN';
+                utterance.rate = 0.9;
+                
+                // Find a Malayalam voice if available
+                const voices = window.speechSynthesis.getVoices();
+                const malayalamVoice = voices.find(voice => voice.lang === 'ml-IN');
+                if (malayalamVoice) {
+                    utterance.voice = malayalamVoice;
+                } else {
+                    console.warn("Malayalam voice not found, using default.");
+                }
+
+                utterance.onstart = () => {
+                    status.textContent = "സംസാരിക്കുന്നു...";
+                };
+                utterance.onend = () => {
+                    status.textContent = "മൈക്ക് ബട്ടൺ അമർത്തി സംസാരിക്കുക";
+                };
+                window.speechSynthesis.speak(utterance);
+            } catch (error) {
+                console.error("TTS Error:", error);
+                showModal("Sorry, I cannot speak the response right now.");
+                status.textContent = "മൈക്ക് ബട്ടൺ അമർത്തി സംസാരിക്കുക";
+            }
+        }
+        // Ensure voices are loaded
+        window.speechSynthesis.onvoiceschanged = () => {
+            console.log("Voices loaded.");
+        };
+
+
+        // --- QUERY PROCESSING ---
+        const localFAQs = {
+            "ഹലോ": "ഹലോ! നിങ്ങൾക്ക് എന്ത് സഹായമാണ് വേണ്ടത്?",
+            "എന്തൊക്കെയുണ്ട് വിശേഷം": "സുഖം, നന്ദി! നിങ്ങൾക്കോ?",
+            "നിങ്ങളുടെ പേരെന്താണ്": "ഞാനൊരു വോയിസ് അസിസ്റ്റന്റ് ആണ്.",
+            "അഡ്മിഷൻ എപ്പോഴാണ് തുടങ്ങുന്നത്": "അഡ്മിഷൻ സാധാരണയായി മെയ് മാസത്തിൽ ആരംഭിക്കും. കൂടുതൽ വിവരങ്ങൾക്കായി വെബ്സൈറ്റ് സന്ദർശിക്കുക.",
+            "ഫീസ് എത്രയാണ്": "ഫീസ് ഘടന കോഴ്സ് അനുസരിച്ച് വ്യത്യാസപ്പെടും. ദയവായി അക്കൗണ്ട്സ് വിഭാഗവുമായി ബന്ധപ്പെടുക."
+        };
+
+        async function processQuery(query) {
+            assistantResponse.textContent = '';
+            const normalizedQuery = query.trim();
+
+            // 1. Check local FAQs first
+            if (localFAQs[normalizedQuery]) {
+                const responseText = localFAQs[normalizedQuery];
+                assistantResponse.textContent = responseText;
+                speak(responseText);
+                return;
+            }
+
+            // 2. If not in local FAQs, call Gemini API
+            status.textContent = "AI-യോട് ചോദിക്കുന്നു...";
+            try {
+                const prompt = `You are a helpful Malayalam assistant. Answer the following question in simple Malayalam: "${normalizedQuery}"`;
+                let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+                const payload = { contents: chatHistory };
+                const apiKey = ""; // Leave empty, will be handled by the environment
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API request failed with status ${response.status}`);
+                }
+
+                const result = await response.json();
+
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const text = result.candidates[0].content.parts[0].text;
+                    assistantResponse.textContent = text;
+                    speak(text);
+                } else {
+                    throw new Error("Invalid response structure from API.");
+                }
+
+            } catch (error) {
+                console.error("Gemini API Error:", error);
+                const errorMessage = "ക്ഷമിക്കണം, എനിക്ക് ഇപ്പോൾ ഉത്തരം കണ്ടെത്താൻ കഴിയുന്നില്ല.";
+                assistantResponse.textContent = errorMessage;
+                speak(errorMessage);
+                status.textContent = "ഒരു പിശക് സംഭവിച്ചു.";
+            }
+        }
+
+        // --- EVENT LISTENERS ---
+        micButton.addEventListener('click', () => {
+            if (isListening) {
+                recognition.stop();
+            } else {
+                // Clear previous results
+                userQuery.textContent = '';
+                assistantResponse.textContent = '';
+                try {
+                    recognition.start();
+                } catch(e) {
+                    console.error("Could not start recognition:", e);
+                    status.textContent = "വീണ്ടും ശ്രമിക്കുക.";
+                }
+            }
+        });
+
+        // --- INITIALIZATION ---
+        window.onload = () => {
+            initializeFirebase();
+        };
+
+    </script>
+</body>
+</html>
